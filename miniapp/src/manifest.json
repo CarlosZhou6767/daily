@@ -1,0 +1,17 @@
+{
+  "name": "Daily",
+  "appid": "",
+  "description": "自律打卡积分抽奖",
+  "versionName": "1.0.0",
+  "versionCode": "100",
+  "transformPx": false,
+  "mp-weixin": {
+    "appid": "",
+    "setting": {
+      "urlCheck": false,
+      "es6": true,
+      "minified": true
+    },
+    "usingComponents": true
+  }
+}

@@ -1,0 +1,235 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-size: 16px;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-950 antialiased;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-300 dark:bg-slate-600 rounded-full;
+  }
+}
+
+@layer components {
+  /* 侧边栏 */
+  .sidebar {
+    @apply fixed left-0 top-0 h-full w-64 bg-white dark:bg-slate-900 border-r border-slate-100 dark:border-slate-800 flex flex-col z-40 transition-transform;
+  }
+
+  .sidebar-nav-item {
+    @apply flex items-center gap-3 px-4 py-2.5 mx-2 rounded-xl text-slate-500 dark:text-slate-400 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-200 cursor-pointer;
+  }
+
+  .sidebar-nav-item.active {
+    @apply bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-400;
+  }
+
+  /* 统计卡片 */
+  .stat-card {
+    @apply bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-card border border-slate-100 dark:border-slate-800 hover:shadow-card-hover transition-all duration-300;
+  }
+
+  .stat-icon {
+    @apply w-10 h-10 rounded-xl flex items-center justify-center text-lg;
+  }
+
+  .stat-value {
+    @apply text-2xl font-bold text-slate-800 dark:text-slate-200;
+  }
+
+  .stat-label {
+    @apply text-sm text-slate-500 dark:text-slate-400;
+  }
+
+  /* 打卡卡片 */
+  .checkin-card {
+    @apply bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-card border border-slate-100 dark:border-slate-800 hover:shadow-card-hover transition-all duration-300;
+  }
+
+  .checkin-card.checked {
+    @apply opacity-70 bg-slate-50 dark:bg-slate-800/50;
+  }
+
+  /* 进度环 */
+  .progress-ring {
+    @apply relative w-12 h-12;
+  }
+
+  .progress-ring-circle {
+    @apply w-full h-full transform -rotate-90;
+  }
+
+  /* 按钮 */
+  .btn-primary {
+    @apply px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-sm font-medium transition-colors duration-200 shadow-sm;
+  }
+
+  .btn-primary:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  .btn-outline {
+    @apply px-5 py-2.5 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors duration-200;
+  }
+
+  .btn-checkin {
+    @apply px-4 py-1.5 rounded-lg text-xs font-medium transition-all duration-200;
+  }
+
+  .btn-checkin-default {
+    @apply bg-brand-50 text-brand-600 hover:bg-brand-100 dark:bg-brand-900/30 dark:text-brand-400 dark:hover:bg-brand-900/50;
+  }
+
+  .btn-checkin-done {
+    @apply bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400;
+  }
+
+  /* 顶部信息栏 */
+  .top-bar {
+    @apply flex items-center justify-between px-6 py-3 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border-b border-slate-100 dark:border-slate-800;
+  }
+
+  /* 主内容区 */
+  .main-content {
+    @apply flex-1 overflow-auto;
+  }
+
+  .page-container {
+    @apply p-6 max-w-7xl mx-auto;
+  }
+
+  /* 页面标题 */
+  .page-title {
+    @apply text-xl font-bold text-slate-800 dark:text-slate-200;
+  }
+
+  .page-subtitle {
+    @apply text-sm text-slate-500 dark:text-slate-400 mt-1;
+  }
+
+  /* 日历圆圈 */
+  .calendar-circle {
+    @apply w-12 h-12 md:w-14 md:h-14 rounded-full flex items-center justify-center text-sm font-medium transition-all;
+  }
+
+  .calendar-circle.checked {
+    @apply bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-400;
+  }
+
+  .calendar-circle.today {
+    @apply bg-brand-600 text-white shadow-lg;
+  }
+
+  .calendar-circle.empty {
+    @apply text-slate-300 dark:text-slate-600;
+  }
+
+  /* 积分流水 */
+  .flow-item {
+    @apply flex items-center justify-between px-4 py-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800;
+  }
+
+  .flow-positive {
+    @apply text-brand-600 dark:text-brand-400 font-medium;
+  }
+
+  .flow-negative {
+    @apply text-red-500 dark:text-red-400 font-medium;
+  }
+
+  /* 转盘 */
+  .wheel-container {
+    @apply relative mx-auto;
+  }
+
+  .wheel-pointer {
+    @apply absolute -top-3 left-1/2 -translate-x-1/2 z-20;
+  }
+
+  /* 徽章 */
+  .badge {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge-green {
+    @apply bg-brand-50 text-brand-600 dark:bg-brand-900/30 dark:text-brand-400;
+  }
+
+  .badge-blue {
+    @apply bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400;
+  }
+
+  .badge-orange {
+    @apply bg-orange-50 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400;
+  }
+
+  .badge-purple {
+    @apply bg-purple-50 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400;
+  }
+
+  .badge-new {
+    @apply bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400 px-1.5 py-0.5 rounded text-[10px] font-bold;
+  }
+
+  /* 设置区块 */
+  .settings-section {
+    @apply bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-card border border-slate-100 dark:border-slate-800 mb-4;
+  }
+
+  .settings-title {
+    @apply text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4 flex items-center gap-2;
+  }
+
+  /* 开关 */
+  .toggle {
+    @apply relative w-10 h-6 bg-slate-200 dark:bg-slate-700 rounded-full cursor-pointer transition-colors;
+  }
+
+  .toggle.active {
+    @apply bg-brand-600;
+  }
+
+  .toggle-dot {
+    @apply absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform;
+  }
+
+  .toggle.active .toggle-dot {
+    @apply translate-x-4;
+  }
+}
+
+/* 页面过渡动画 */
+.page-enter-active,
+.page-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.page-enter-from,
+.page-leave-to {
+  opacity: 0;
+}
+
+/* 安全区域适配 */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

@@ -8,6 +8,7 @@ const router = express.Router();
 const auth = require('../middleware/auth');
 const { validate, body } = require('../middleware/validator');
 const { doCheckin, getTodayCheckin, getCheckinHistory, getStreak, createTask, deleteTask, getTasks } = require('../services/checkinService');
+const { success } = require('../utils/responseHelper');
 
 // 执行打卡
 router.post('/', auth, validate([
@@ -21,7 +22,7 @@ router.post('/', auth, validate([
   try {
     const { taskId, imagePath, note } = req.body;
     const result = doCheckin(req.user.userId, taskId, imagePath, note);
-    res.json({ code: 200, message: '打卡成功', data: result });
+    return success(res, result, '打卡成功');
   } catch (err) {
     next(err);
   }
@@ -31,7 +32,7 @@ router.post('/', auth, validate([
 router.get('/today', auth, (req, res, next) => {
   try {
     const result = getTodayCheckin(req.user.userId);
-    res.json({ code: 200, data: result });
+    return success(res, result);
   } catch (err) {
     next(err);
   }
@@ -48,7 +49,7 @@ router.get('/history', auth, (req, res, next) => {
       parseInt(page) || 1,
       parseInt(pageSize) || 30
     );
-    res.json({ code: 200, data: result });
+    return success(res, result);
   } catch (err) {
     next(err);
   }
@@ -58,7 +59,7 @@ router.get('/history', auth, (req, res, next) => {
 router.get('/streak', auth, (req, res, next) => {
   try {
     const result = getStreak(req.user.userId);
-    res.json({ code: 200, data: result });
+    return success(res, result);
   } catch (err) {
     next(err);
   }
@@ -68,7 +69,7 @@ router.get('/streak', auth, (req, res, next) => {
 router.get('/tasks', auth, (req, res, next) => {
   try {
     const result = getTasks(req.user.userId);
-    res.json({ code: 200, data: result });
+    return success(res, result);
   } catch (err) {
     next(err);
   }
@@ -82,7 +83,7 @@ router.post('/tasks', auth, validate([
   try {
     const { name, icon, description } = req.body;
     const result = createTask(req.user.userId, name, icon, description);
-    res.json({ code: 200, message: '创建成功', data: result });
+    return success(res, result, '创建成功');
   } catch (err) {
     next(err);
   }
@@ -92,7 +93,7 @@ router.post('/tasks', auth, validate([
 router.delete('/tasks/:id', auth, (req, res, next) => {
   try {
     deleteTask(req.user.userId, parseInt(req.params.id));
-    res.json({ code: 200, message: '删除成功' });
+    return success(res, null, '删除成功');
   } catch (err) {
     next(err);
   }

@@ -6,6 +6,7 @@ const express = require('express');
 const router = express.Router();
 const { register, login, wechatLogin } = require('../services/userService');
 const { validate, body } = require('../middleware/validator');
+const { success } = require('../utils/responseHelper');
 
 // 用户注册
 router.post('/register', validate([
@@ -23,7 +24,7 @@ router.post('/register', validate([
   try {
     const { username, password, nickname } = req.body;
     const result = register(username, password, nickname);
-    res.json({ code: 200, message: '注册成功', data: result });
+    return success(res, result, '注册成功');
   } catch (err) {
     next(err);
   }
@@ -39,7 +40,7 @@ router.post('/login', validate([
   try {
     const { username, password } = req.body;
     const result = login(username, password);
-    res.json({ code: 200, message: '登录成功', data: result });
+    return success(res, result, '登录成功');
   } catch (err) {
     next(err);
   }
@@ -53,7 +54,7 @@ router.post('/wechat-login', validate([
   try {
     const { openid } = req.body;
     const result = wechatLogin(openid);
-    res.json({ code: 200, message: '登录成功', data: result });
+    return success(res, result, '登录成功');
   } catch (err) {
     next(err);
   }

@@ -96,9 +96,11 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useUserStore } from '../stores/user'
 import { useCheckinStore } from '../stores/checkin'
+import { useCalendar } from '../composables/useCalendar'
+import api from '../api'
 
 const userStore = useUserStore()
 const checkinStore = useCheckinStore()
@@ -107,7 +109,8 @@ const viewYear = ref(new Date().getFullYear())
 const viewMonth = ref(new Date().getMonth())
 const checkedDates = ref(new Set())
 
-const weekDays = ['一', '二', '三', '四', '五', '六', '日']
+// BUG-OPT-005 修复：使用通用日历组合函数，消除重复代码
+const { calendarCells, weekDays } = useCalendar(viewYear, viewMonth, checkedDates)
 
 const currentMonthLabel = computed(() => `${viewYear.value}年${viewMonth.value + 1}月`)
 const currentStreak = computed(() => checkinStore.streak?.currentStreak || 0)
@@ -117,35 +120,6 @@ const completionRate = computed(() => {
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
   const today = now.getDate()
   return today > 0 ? Math.round((checkedDates.value.size / today) * 100) : 0
-})
-
-// 日历单元格
-const calendarCells = computed(() => {
-  const year = viewYear.value
-  const month = viewMonth.value
-  const firstDay = new Date(year, month, 1)
-  let startWeekday = firstDay.getDay() - 1
-  if (startWeekday < 0) startWeekday = 6
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const now = new Date()
-  const cells = []
-
-  for (let i = 0; i < startWeekday; i++) {
-    cells.push({ day: 0, dateStr: '', checked: false, isToday: false })
-  }
-
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-    const isToday = year === now.getFullYear() && month === now.getMonth() && d === now.getDate()
-    cells.push({
-      day: d,
-      dateStr,
-      checked: checkedDates.value.has(dateStr),
-      isToday,
-    })
-  }
-
-  return cells
 })
 
 function getCellClass(cell) {
@@ -175,17 +149,38 @@ function nextMonth() {
   }
 }
 
-// 获取历史打卡记录填充日历
+// BUG-OPT-005 修复：支持多页加载，确保日历覆盖所有打卡记录
 async function fetchCheckinHistory() {
   try {
-    const res = await api.get('/checkin/history', { params: { page: 1, pageSize: 100 } })
-    checkedDates.value = new Set(res.data.records.map(r => r.checkinDate))
+    let allDates = []
+    let currentPage = 1
+    let totalPages = 1
+    
+    // 循环加载所有分页数据，避免仅获取第一页导致的记录遗漏
+    do {
+      const res = await api.get('/checkin/history', {
+        params: {
+          year: viewYear.value,
+          month: viewMonth.value + 1,
+          page: currentPage,
+          pageSize: 100
+        }
+      })
+      allDates.push(...res.data.records.map(r => r.checkinDate))
+      totalPages = res.data.totalPages
+      currentPage++
+    } while (currentPage <= totalPages)
+    
+    checkedDates.value = new Set(allDates)
   } catch (err) {
     console.error('Failed to fetch history:', err)
   }
 }
 
-import api from '../api'
+// BUG-OPT-005 修复：切换月份时自动重新加载该月的打卡记录
+watch([viewYear, viewMonth], () => {
+  fetchCheckinHistory()
+})
 
 onMounted(async () => {
   await Promise.all([

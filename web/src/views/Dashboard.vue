@@ -155,6 +155,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useUserStore } from '../stores/user'
 import { useCheckinStore } from '../stores/checkin'
 import { escapeHtml } from '../utils/xssFilter'
+import { useCalendar } from '../composables/useCalendar'
 import StatCard from '../components/StatCard.vue'
 import api from '../api'
 
@@ -196,73 +197,79 @@ const currentMonthLabel = computed(() => {
   return `${now.getFullYear()}年${now.getMonth() + 1}月`
 })
 
-// 星期标题
+// 星期标题 — 由 useCalendar 提供
 const weekDays = ['一', '二', '三', '四', '五', '六', '日']
 
-// 本周数据（模拟）
+// BUG-OPT-004 修复：周趋势数据改为从真实 API 获取，不再使用 Math.random() 模拟
+const weeklyStats = ref([])
+
+async function fetchWeeklyStats() {
+  try {
+    // 获取当前月打卡记录，从中提取本周趋势数据
+    const now = new Date()
+    const res = await api.get('/checkin/history', {
+      params: { year: now.getFullYear(), month: now.getMonth() + 1, page: 1, pageSize: 200 }
+    })
+    const records = res.data.records || []
+    
+    // 按日期分组计算每日完成率
+    const dateCounts = {}
+    records.forEach(r => {
+      dateCounts[r.checkinDate] = (dateCounts[r.checkinDate] || 0) + 1
+    })
+    
+    const days = []
+    const totalTasksCount = totalTasks.value || 1
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now)
+      d.setDate(d.getDate() - i)
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      const count = dateCounts[dateStr] || 0
+      days.push({
+        label: 'W' + (7 - i),
+        rate: Math.min(count / totalTasksCount, 1),
+      })
+    }
+    weeklyStats.value = days
+  } catch (err) {
+    console.error('Failed to fetch weekly stats:', err)
+  }
+}
+
+// 本周趋势数据（BUG-OPT-004 修复）
 const weekData = computed(() => {
-  const today = new Date()
-  const days = []
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(today)
-    d.setDate(d.getDate() - i)
-    const rate = i === 0 ? (totalTasks.value > 0 ? todayDone.value / totalTasks.value : 0) : Math.random() * 0.8 + 0.2
-    days.push({
-      label: 'W' + (7 - i),
-      rate: Math.min(rate, 1),
-    })
-  }
-  return days
+  return weeklyStats.value.length > 0 ? weeklyStats.value : []
 })
 
-// 日历单元格
-const calendarCells = computed(() => {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = now.getMonth()
-  const firstDay = new Date(year, month, 1)
-  let startWeekday = firstDay.getDay() - 1
-  if (startWeekday < 0) startWeekday = 6
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const cells = []
-
-  for (let i = 0; i < startWeekday; i++) {
-    cells.push({ day: 0, dateStr: '', checked: false, isToday: false })
-  }
-
-  const checkedDates = new Set(
-    checkinStore.todayTasks.filter(t => t.checkedIn).map(() => now.toISOString().split('T')[0])
-  )
-
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-    const isToday = d === now.getDate()
-    cells.push({
-      day: d,
-      dateStr,
-      checked: checkedDates.has(dateStr) || (isToday && todayDone.value > 0),
-      isToday,
-    })
-  }
-
-  return cells
+// BUG-OPT-004 修复：使用通用日历组合函数，消除重复代码
+const checkedDates = computed(() => {
+  const dates = new Set()
+  checkinStore.todayTasks.filter(t => t.checkedIn).forEach(() => {
+    const now = new Date()
+    dates.add(now.toISOString().split('T')[0])
+  })
+  return dates
 })
+const { calendarCells } = useCalendar(
+  computed(() => new Date().getFullYear()),
+  computed(() => new Date().getMonth()),
+  checkedDates
+)
 
-// 任务背景色
+// 任务背景色映射表（BUG-OPT-013 优化）
+// 使用精确哈希映射替代子串遍历，O(1) 时间复杂度，避免 O(n*m) 的字符串匹配开销
+const TASK_BG_MAP = {
+  '早起打卡': 'bg-orange-50 dark:bg-orange-900/20',
+  '运动健身': 'bg-blue-50 dark:bg-blue-900/20',
+  '阅读学习': 'bg-purple-50 dark:bg-purple-900/20',
+  '早睡打卡': 'bg-indigo-50 dark:bg-indigo-900/20',
+  '健康饮食': 'bg-green-50 dark:bg-green-900/20',
+  '吃早餐': 'bg-amber-50 dark:bg-amber-900/20',
+  '喝水': 'bg-cyan-50 dark:bg-cyan-900/20',
+}
+
 function getTaskBgClass(name) {
-  const map = {
-    '早起': 'bg-orange-50 dark:bg-orange-900/20',
-    '运动': 'bg-blue-50 dark:bg-blue-900/20',
-    '阅读': 'bg-purple-50 dark:bg-purple-900/20',
-    '早睡': 'bg-indigo-50 dark:bg-indigo-900/20',
-    '健康': 'bg-green-50 dark:bg-green-900/20',
-    '早餐': 'bg-amber-50 dark:bg-amber-900/20',
-    '喝水': 'bg-cyan-50 dark:bg-cyan-900/20',
-  }
-  for (const [key, val] of Object.entries(map)) {
-    if (name.includes(key)) return val
-  }
-  return 'bg-brand-50 dark:bg-brand-900/20'
+  return TASK_BG_MAP[name] || 'bg-brand-50 dark:bg-brand-900/20'
 }
 
 // 进度环颜色
@@ -311,5 +318,6 @@ onMounted(async () => {
     checkinStore.fetchStreak(),
   ])
   fetchMonthStats()
+  fetchWeeklyStats() // BUG-OPT-004 修复：加载真实周趋势数据
 })
 </script>

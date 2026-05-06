@@ -12,6 +12,7 @@ const upload = require('../middleware/upload');
 const { compressImage } = require('../utils/imageCompress');
 const { validateFileContent } = require('../utils/fileValidator');
 const { getDb } = require('../db');
+const { success, fail } = require('../utils/responseHelper');
 
 // 允许的文件扩展名白名单
 const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
@@ -33,7 +34,7 @@ function isPathSafe(filePath, baseDir) {
 router.post('/', auth, upload.single('image'), (req, res, next) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ code: 400, message: '请选择图片' });
+      return fail(res, 400, '请选择图片');
     }
 
     // 验证文件扩展名
@@ -43,7 +44,7 @@ router.post('/', auth, upload.single('image'), (req, res, next) => {
       if (fs.existsSync(req.file.path)) {
         fs.unlinkSync(req.file.path);
       }
-      return res.status(400).json({ code: 400, message: '不支持的文件类型' });
+      return fail(res, 400, '不支持的文件类型');
     }
 
     // 验证文件路径安全性，防止路径遍历
@@ -52,7 +53,7 @@ router.post('/', auth, upload.single('image'), (req, res, next) => {
       if (fs.existsSync(req.file.path)) {
         fs.unlinkSync(req.file.path);
       }
-      return res.status(400).json({ code: 400, message: '非法文件路径' });
+      return fail(res, 400, '非法文件路径');
     }
 
     // 验证文件 Magic Number，确保是真实图片
@@ -61,7 +62,7 @@ router.post('/', auth, upload.single('image'), (req, res, next) => {
       if (fs.existsSync(req.file.path)) {
         fs.unlinkSync(req.file.path);
       }
-      return res.status(400).json({ code: 400, message: '文件内容验证失败' });
+      return fail(res, 400, '文件内容验证失败');
     }
 
     // 压缩图片并生成缩略图
@@ -69,7 +70,7 @@ router.post('/', auth, upload.single('image'), (req, res, next) => {
 
     // 验证压缩后的路径安全性
     if (!isPathSafe(compressed.compressedPath, uploadDir)) {
-      return res.status(500).json({ code: 500, message: '文件处理异常' });
+      return fail(res, 500, '文件处理异常');
     }
 
     const relativePath = path.relative(path.join(__dirname, '../../'), compressed.compressedPath).replace(/\\/g, '/');
@@ -80,15 +81,11 @@ router.post('/', auth, upload.single('image'), (req, res, next) => {
       'INSERT INTO images (user_id, file_path, original_name, file_size, width, height, related_type) VALUES (?, ?, ?, ?, ?, ?, ?)'
     ).run(req.user.userId, relativePath, req.file.originalname, req.file.size, compressed.width, compressed.height, req.body.type || 'checkin');
 
-    res.json({
-      code: 200,
-      message: '上传成功',
-      data: {
-        path: '/' + relativePath,
-        width: compressed.width,
-        height: compressed.height,
-      },
-    });
+    success(res, {
+      path: '/' + relativePath,
+      width: compressed.width,
+      height: compressed.height,
+    }, '上传成功');
   } catch (err) {
     // 清理上传的文件，防止残留
     if (req.file && fs.existsSync(req.file.path)) {

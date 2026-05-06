@@ -6,13 +6,14 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
-const { getBalance, getPointsLog } = require('../services/pointsService');
+const { getBalance, getPointsLog, getConsumedPoints } = require('../services/pointsService');
+const { success } = require('../utils/responseHelper');
 
 // 获取当前积分余额
 router.get('/balance', auth, (req, res, next) => {
   try {
     const result = getBalance(req.user.userId);
-    res.json({ code: 200, data: result });
+    return success(res, result);
   } catch (err) {
     next(err);
   }
@@ -28,7 +29,17 @@ router.get('/log', auth, (req, res, next) => {
       parseInt(page) || 1,
       parseInt(pageSize) || 20
     );
-    res.json({ code: 200, data: result });
+    return success(res, result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 获取已消耗积分总数（服务端聚合计算，避免前端全量遍历）
+router.get('/consumed', auth, (req, res, next) => {
+  try {
+    const total = getConsumedPoints(req.user.userId);
+    return success(res, { total });
   } catch (err) {
     next(err);
   }

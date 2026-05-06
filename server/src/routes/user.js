@@ -8,12 +8,13 @@ const router = express.Router();
 const auth = require('../middleware/auth');
 const { validate, body } = require('../middleware/validator');
 const { getUserById, updateProfile, changePassword, getUserStats } = require('../services/userService');
+const { success, fail } = require('../utils/responseHelper');
 
 // 获取当前用户信息
 router.get('/profile', auth, (req, res, next) => {
   try {
     const result = getUserById(req.user.userId);
-    res.json({ code: 200, data: result });
+    return success(res, result);
   } catch (err) {
     next(err);
   }
@@ -40,10 +41,10 @@ router.put('/profile', auth, validate([
       }
     }
     if (Object.keys(updates).length === 0) {
-      return res.status(400).json({ code: 400, message: '没有有效的更新字段' });
+      return fail(res, 400, '没有有效的更新字段');
     }
     updateProfile(req.user.userId, updates);
-    res.json({ code: 200, message: '更新成功' });
+    return success(res, null, '更新成功');
   } catch (err) {
     next(err);
   }
@@ -64,7 +65,7 @@ router.put('/password', auth, validate([
   try {
     const { oldPassword, newPassword } = req.body;
     changePassword(req.user.userId, oldPassword, newPassword);
-    res.json({ code: 200, message: '密码修改成功' });
+    return success(res, null, '密码修改成功');
   } catch (err) {
     next(err);
   }
@@ -74,7 +75,7 @@ router.put('/password', auth, validate([
 router.get('/stats', auth, (req, res, next) => {
   try {
     const result = getUserStats(req.user.userId);
-    res.json({ code: 200, data: result });
+    return success(res, result);
   } catch (err) {
     next(err);
   }

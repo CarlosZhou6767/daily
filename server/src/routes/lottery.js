@@ -6,24 +6,24 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
-const { validate } = require('../middleware/validator');
 const { getPrizes, draw, getLotteryRecords } = require('../services/lotteryService');
+const { success } = require('../utils/responseHelper');
 
 // 获取奖品列表
 router.get('/prizes', auth, (req, res, next) => {
   try {
     const result = getPrizes();
-    res.json({ code: 200, data: result });
+    return success(res, result);
   } catch (err) {
     next(err);
   }
 });
 
 // 执行抽奖（消耗积分）
-router.post('/draw', auth, validate([]), (req, res, next) => {
+router.post('/draw', auth, (req, res, next) => {
   try {
     const result = draw(req.user.userId);
-    res.json({ code: 200, message: '抽奖成功', data: result });
+    return success(res, result, '抽奖成功');
   } catch (err) {
     next(err);
   }
@@ -38,7 +38,7 @@ router.get('/records', auth, (req, res, next) => {
       parseInt(page) || 1,
       parseInt(pageSize) || 20
     );
-    res.json({ code: 200, data: result });
+    return success(res, result);
   } catch (err) {
     next(err);
   }

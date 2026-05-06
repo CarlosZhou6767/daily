@@ -10,11 +10,12 @@ const auth = require('../middleware/auth');
 const adminAuth = require('../middleware/adminAuth');
 const {
   makeupCheckin, adjustPoints, getDashboard, getUsers, updateUserStatus,
-  getAllCheckins, getAllPointsLog, managePrize, getAllLotteryRecords,
+  getAllCheckins, getAllPointsLog, createPrize, updatePrize, deletePrize, getAllLotteryRecords,
   getAllImages, getAdminLogs,
 } = require('../services/adminService');
 const { getPrizes } = require('../services/lotteryService');
 const { backupDatabase } = require('../utils/backup');
+const { success, fail } = require('../utils/responseHelper');
 
 // 所有管理员路由都需要认证 + 管理员权限
 router.use(auth, adminAuth);
@@ -23,7 +24,7 @@ router.use(auth, adminAuth);
 router.get('/dashboard', (req, res, next) => {
   try {
     const result = getDashboard();
-    res.json({ code: 200, data: result });
+    return success(res, result);
   } catch (err) {
     next(err);
   }
@@ -39,7 +40,7 @@ router.get('/users', (req, res, next) => {
       search || '',
       status || ''
     );
-    res.json({ code: 200, data: result });
+    return success(res, result);
   } catch (err) {
     next(err);
   }
@@ -50,7 +51,7 @@ router.put('/users/:id', (req, res, next) => {
   try {
     const { status, confirmed } = req.body;
     const result = updateUserStatus(req.user.userId, parseInt(req.params.id), status, confirmed === true);
-    res.json({ code: 200, message: '更新成功', data: result });
+    return success(res, result, '更新成功');
   } catch (err) {
     next(err);
   }
@@ -61,10 +62,10 @@ router.post('/checkin/makeup', (req, res, next) => {
   try {
     const { userId, taskId, checkinDate, confirmed } = req.body;
     if (!userId || !taskId || !checkinDate) {
-      return res.status(400).json({ code: 400, message: '用户ID、任务ID和日期不能为空' });
+      return fail(res, 400, '用户ID、任务ID和日期不能为空');
     }
     const result = makeupCheckin(req.user.userId, userId, taskId, checkinDate, confirmed === true);
-    res.json({ code: 200, message: '补打卡成功', data: result });
+    return success(res, result, '补打卡成功');
   } catch (err) {
     next(err);
   }
@@ -81,7 +82,7 @@ router.get('/checkins', (req, res, next) => {
       startDate || '',
       endDate || ''
     );
-    res.json({ code: 200, data: result });
+    return success(res, result);
   } catch (err) {
     next(err);
   }
@@ -97,7 +98,7 @@ router.get('/points', (req, res, next) => {
       userId || '',
       type || ''
     );
-    res.json({ code: 200, data: result });
+    return success(res, result);
   } catch (err) {
     next(err);
   }
@@ -108,10 +109,10 @@ router.post('/points/adjust', (req, res, next) => {
   try {
     const { userId, amount, reason, confirmed } = req.body;
     if (!userId || amount === undefined) {
-      return res.status(400).json({ code: 400, message: '用户ID和积分数量不能为空' });
+      return fail(res, 400, '用户ID和积分数量不能为空');
     }
     const result = adjustPoints(req.user.userId, userId, amount, reason, confirmed === true);
-    res.json({ code: 200, message: '积分调整成功', data: result });
+    return success(res, result, '积分调整成功');
   } catch (err) {
     next(err);
   }
@@ -121,7 +122,7 @@ router.post('/points/adjust', (req, res, next) => {
 router.get('/prizes', (req, res, next) => {
   try {
     const result = getPrizes();
-    res.json({ code: 200, data: result });
+    return success(res, result);
   } catch (err) {
     next(err);
   }
@@ -132,13 +133,13 @@ router.post('/prizes', (req, res, next) => {
   try {
     const { name, probability } = req.body;
     if (!name) {
-      return res.status(400).json({ code: 400, message: '奖品名称不能为空' });
+      return fail(res, 400, '奖品名称不能为空');
     }
     if (probability === undefined || probability < 0 || probability > 1) {
-      return res.status(400).json({ code: 400, message: '概率必须在0-1之间' });
+      return fail(res, 400, '概率必须在0-1之间');
     }
-    const result = managePrize(req.user.userId, 'create', req.body);
-    res.json({ code: 200, message: '创建成功', data: result });
+    const result = createPrize(req.user.userId, req.body);
+    return success(res, result, '创建成功');
   } catch (err) {
     next(err);
   }
@@ -148,8 +149,8 @@ router.post('/prizes', (req, res, next) => {
 router.put('/prizes/:id', (req, res, next) => {
   try {
     const prizeData = { ...req.body, id: parseInt(req.params.id) };
-    const result = managePrize(req.user.userId, 'update', prizeData);
-    res.json({ code: 200, message: '更新成功', data: result });
+    const result = updatePrize(req.user.userId, prizeData);
+    return success(res, result, '更新成功');
   } catch (err) {
     next(err);
   }
@@ -159,8 +160,8 @@ router.put('/prizes/:id', (req, res, next) => {
 router.delete('/prizes/:id', (req, res, next) => {
   try {
     const { confirmed } = req.body;
-    const result = managePrize(req.user.userId, 'delete', { id: parseInt(req.params.id) }, confirmed === true);
-    res.json({ code: 200, message: '删除成功', data: result });
+    const result = deletePrize(req.user.userId, parseInt(req.params.id), confirmed === true);
+    return success(res, result, '删除成功');
   } catch (err) {
     next(err);
   }
@@ -171,7 +172,7 @@ router.get('/lottery/records', (req, res, next) => {
   try {
     const { page, pageSize } = req.query;
     const result = getAllLotteryRecords(parseInt(page) || 1, parseInt(pageSize) || 20);
-    res.json({ code: 200, data: result });
+    return success(res, result);
   } catch (err) {
     next(err);
   }
@@ -186,17 +187,22 @@ router.get('/images', (req, res, next) => {
       parseInt(pageSize) || 20,
       userId || ''
     );
-    res.json({ code: 200, data: result });
+    return success(res, result);
   } catch (err) {
     next(err);
   }
 });
 
-// 数据库备份（打包数据库文件和上传目录为 ZIP）
+// 数据库备份（打包数据库文件和上传目录为 ZIP）- 敏感操作，需要二次确认
 router.post('/backup', (req, res, next) => {
   try {
+    const { confirmed } = req.body;
+    // 数据库备份涉及完整数据导出，属于敏感操作，需要二次确认
+    if (!confirmed) {
+      return fail(res, 400, '备份操作需要二次确认，请在请求中设置 confirmed: true');
+    }
     const result = backupDatabase();
-    res.json({ code: 200, message: '备份成功', data: result });
+    return success(res, result, '备份成功');
   } catch (err) {
     next(err);
   }
@@ -207,7 +213,7 @@ router.get('/logs', (req, res, next) => {
   try {
     const { page, pageSize } = req.query;
     const result = getAdminLogs(parseInt(page) || 1, parseInt(pageSize) || 20);
-    res.json({ code: 200, data: result });
+    return success(res, result);
   } catch (err) {
     next(err);
   }

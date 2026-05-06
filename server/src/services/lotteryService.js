@@ -5,6 +5,17 @@
  */
 const { getDb, runInTransaction } = require('../db');
 const config = require('../config');
+const { paginate } = require('./paginationHelper');
+const logger = require('../utils/logger');
+
+/**
+ * 奖品内存缓存
+ * 减少抽奖时的重复数据库查询，提升响应速度
+ * TTL 默认 5 分钟，管理员修改奖品后通过 invalidatePrizeCache 主动失效
+ */
+let prizesCache = null;
+let prizesCacheTime = 0;
+const PRIZES_CACHE_TTL = 5 * 60 * 1000;
 
 /**
  * 获取所有活跃奖品列表
@@ -44,10 +55,8 @@ function draw(userId) {
       throw new Error(`积分不足，需要${config.pointsRules.lotteryCost}积分`);
     }
 
-    // 在事务中查询奖品列表，确保库存数据一致性
-    const prizes = db.prepare(
-      'SELECT id, name, probability, prize_type, points_reward, stock FROM prizes WHERE status = ?'
-    ).all('active');
+    // 使用缓存获取奖品列表，减少事务内数据库查询
+    const prizes = getPrizes();
 
     if (prizes.length === 0) {
       throw new Error('暂无可用奖品');
@@ -137,25 +146,22 @@ function draw(userId) {
  */
 function getLotteryRecords(userId, page = 1, pageSize = 20) {
   const db = getDb();
-  const offset = (page - 1) * pageSize;
 
-  const total = db.prepare(
-    'SELECT COUNT(*) as total FROM lottery_records WHERE user_id = ?'
-  ).get(userId).total;
-
-  const records = db.prepare(
-    `SELECT lr.id, lr.prize_id, p.name as prize_name, p.prize_type, p.points_reward, lr.points_cost, lr.is_received, lr.created_at
+  return paginate(db, {
+    countSql: 'lottery_records WHERE user_id = ?',
+    dataSql: `SELECT lr.id, lr.prize_id, p.name as prize_name, p.prize_type, p.points_reward, lr.points_cost, lr.is_received, lr.created_at
      FROM lottery_records lr
      LEFT JOIN prizes p ON lr.prize_id = p.id
      WHERE lr.user_id = ?
-     ORDER BY lr.created_at DESC
-     LIMIT ? OFFSET ?`
-  ).all(userId, pageSize, offset).map((row) => ({
-    id: row.id, prizeId: row.prize_id, prizeName: row.prize_name, prizeType: row.prize_type,
-    pointsReward: row.points_reward, pointsCost: row.points_cost, isReceived: row.is_received, createdAt: row.created_at,
-  }));
-
-  return { records, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
+     ORDER BY lr.created_at DESC`,
+    params: [userId],
+    page,
+    pageSize,
+    mapper: (row) => ({
+      id: row.id, prizeId: row.prize_id, prizeName: row.prize_name, prizeType: row.prize_type,
+      pointsReward: row.points_reward, pointsCost: row.points_cost, isReceived: row.is_received, createdAt: row.created_at,
+    }),
+  });
 }
 
-module.exports = { getPrizes, draw, getLotteryRecords };
+module.exports = { getPrizes, draw, getLotteryRecords, invalidatePrizeCache };

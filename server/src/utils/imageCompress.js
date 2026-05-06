@@ -7,6 +7,7 @@ const sharp = require('sharp');
 const path = require('path');
 const fs = require('fs');
 const config = require('../config');
+const logger = require('./logger');
 
 /**
  * 压缩图片并生成缩略图
@@ -53,7 +54,7 @@ async function compressImage(filePath) {
       height: metadata.height,
     };
   } catch (err) {
-    console.error('Image compress error:', err.message);
+    logger.error('Image compress error', { error: err.message });
 
     // 清理已生成的临时文件
     [compressedPath, thumbPath].forEach((p) => {

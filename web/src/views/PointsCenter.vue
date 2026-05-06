@@ -88,17 +88,26 @@
             <span class="text-brand-600">ℹ️</span> 积分规则说明
           </h3>
           <div class="space-y-3">
+            <!-- BUG-OPT-003 修复：积分规则与服务端 config.pointsRules 保持一致 -->
             <div class="flex items-center gap-2 text-xs text-slate-500">
               <span class="w-2 h-2 rounded-full bg-brand-500"></span>
-              <span>每次成功打卡 <span class="font-medium text-brand-600">+10 积分</span></span>
+              <span>每次成功打卡 <span class="font-medium text-brand-600">+5 积分</span></span>
+            </div>
+            <div class="flex items-center gap-2 text-xs text-slate-500">
+              <span class="w-2 h-2 rounded-full bg-green-500"></span>
+              <span>连续3天打卡 <span class="font-medium text-green-600">+10 积分奖励</span></span>
             </div>
             <div class="flex items-center gap-2 text-xs text-slate-500">
               <span class="w-2 h-2 rounded-full bg-blue-500"></span>
-              <span>连续7天打卡 <span class="font-medium text-blue-600">+50 积分奖励</span></span>
+              <span>连续7天打卡 <span class="font-medium text-blue-600">+30 积分奖励</span></span>
+            </div>
+            <div class="flex items-center gap-2 text-xs text-slate-500">
+              <span class="w-2 h-2 rounded-full bg-cyan-500"></span>
+              <span>连续30天打卡 <span class="font-medium text-cyan-600">+100 积分奖励</span></span>
             </div>
             <div class="flex items-center gap-2 text-xs text-slate-500">
               <span class="w-2 h-2 rounded-full bg-orange-500"></span>
-              <span>参与幸运转盘 <span class="font-medium text-orange-600">-50 积分</span></span>
+              <span>参与幸运转盘 <span class="font-medium text-orange-600">-20 积分</span></span>
             </div>
             <div class="flex items-center gap-2 text-xs text-slate-500">
               <span class="w-2 h-2 rounded-full bg-purple-500"></span>
@@ -111,7 +120,7 @@
         <router-link to="/lottery" class="block bg-gradient-to-r from-brand-50 to-brand-100 dark:from-brand-900/20 dark:to-brand-900/30 rounded-2xl p-5 text-center border border-brand-200 dark:border-brand-800 hover:shadow-card-hover transition-all">
           <div class="text-2xl mb-2">🎰</div>
           <div class="text-sm font-medium text-brand-700 dark:text-brand-400">幸运转盘抽奖</div>
-          <div class="text-xs text-brand-500 dark:text-brand-500 mt-1">每次消耗 50 积分</div>
+          <div class="text-xs text-brand-500 dark:text-brand-500 mt-1">每次消耗 20 积分</div>
           <div class="mt-3">
             <span class="inline-flex items-center gap-1 px-4 py-1.5 bg-brand-600 text-white rounded-lg text-xs font-medium hover:bg-brand-700 transition-colors">
               立即抽奖
@@ -151,11 +160,22 @@ async function fetchRecords() {
     } else {
       records.value.push(...res.data.records)
     }
-    // 计算已消耗积分
-    consumedPoints.value = records.value.filter(r => r.amount < 0).reduce((sum, r) => sum + Math.abs(r.amount), 0)
     hasMore.value = page.value < res.data.totalPages
   } catch (err) {
     console.error('Failed to fetch records:', err)
+  }
+}
+
+/**
+ * 获取已消耗积分总数（BUG-OPT-003 修复）
+ * 从服务端聚合查询获取，避免前端全量遍历计算
+ */
+async function fetchConsumedPoints() {
+  try {
+    const res = await api.get('/points/consumed')
+    consumedPoints.value = res.data.total
+  } catch (err) {
+    console.error('Failed to fetch consumed points:', err)
   }
 }
 
@@ -167,5 +187,6 @@ function loadMore() {
 onMounted(() => {
   fetchBalance()
   fetchRecords()
+  fetchConsumedPoints()
 })
 </script>

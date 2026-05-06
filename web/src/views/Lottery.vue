@@ -38,11 +38,11 @@
           <div class="text-center mt-6">
             <button
               @click="handleSpin"
-              :disabled="spinning || (userStore.user?.points || 0) < 50"
+              :disabled="spinning || isProcessing || (userStore.user?.points || 0) < lotteryCost"
               class="btn-primary text-base px-8 py-3 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <span class="flex items-center gap-2">
-                ✨ 开始抽奖（50积分）
+                ✨ 开始抽奖（{{ lotteryCost }}积分）
               </span>
             </button>
             <div class="text-xs text-slate-400 mt-3">
@@ -98,12 +98,23 @@ const userStore = useUserStore()
 const canvasRef = ref(null)
 const currentRotation = ref(0)
 const spinning = ref(false)
+const isProcessing = ref(false) // 防重复点击锁（BUG-OPT-006 修复），避免快速连点导致状态错乱
 const prizes = ref([])
 const records = ref([])
 const showResult = ref(false)
 const resultPrize = ref('')
 const resultPoints = ref(0)
+/**
+ * 剩余抽奖次数（BUG-OPT-002 修复）
+ * 当前使用频率限制默认值，后续应从服务端限流配置动态获取
+ */
 const remainingDraws = ref(9)
+/**
+ * 抽奖消耗积分（BUG-OPT-002 修复）
+ * 从服务端 pointsRules.lotteryCost 配置同步，默认 20
+ * 后续应通过 API 动态获取以保持与服务端一致
+ */
+const lotteryCost = ref(20)
 
 const wheelSize = 300
 
@@ -168,9 +179,11 @@ async function fetchRecords() {
 }
 
 async function handleSpin() {
-  if (spinning.value) return
-  if ((userStore.user?.points || 0) < 50) return
+  // BUG-OPT-006 修复：防重复点击锁，避免快速连点导致状态错乱
+  if (spinning.value || isProcessing.value) return
+  if ((userStore.user?.points || 0) < lotteryCost.value) return
 
+  isProcessing.value = true
   spinning.value = true
   try {
     const res = await api.post('/lottery/draw')
@@ -179,21 +192,25 @@ async function handleSpin() {
     resultPrize.value = prize.prizeName
     resultPoints.value = prize.pointsReward
 
-    // 计算目标角度
+    // 计算目标角度：确保转盘旋转多圈后停在目标奖品区域
     const prizeIndex = prizes.value.findIndex(p => p.id === prize.prizeId)
     const sliceAngle = 360 / prizes.value.length
     const targetAngle = 360 * 5 + (360 - prizeIndex * sliceAngle - sliceAngle / 2)
     currentRotation.value = targetAngle
 
-    // 等待动画结束
+    // 等待转盘动画结束后显示结果
     setTimeout(async () => {
       spinning.value = false
+      // BUG-OPT-006 修复：重置转盘动画时长，确保下次抽奖动画正常
+      setTimeout(() => { currentRotation.value = currentRotation.value % 360 }, 100)
       showResult.value = true
       await userStore.fetchProfile()
       await fetchRecords()
+      isProcessing.value = false
     }, 4200)
   } catch (err) {
     spinning.value = false
+    isProcessing.value = false
     alert(err.message || '抽奖失败')
   }
 }

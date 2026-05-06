@@ -10,7 +10,12 @@ const PROFILE_CACHE_TTL = 5 * 60 * 1000
 export const useUserStore = defineStore('user', {
   state: () => ({
     // 从 localStorage 恢复登录态
-    user: JSON.parse(localStorage.getItem('daily_user') || 'null'),
+    // BUG-OPT-015 优化：延迟解析，仅在本地存储有值时执行 JSON.parse
+    // 避免不必要的 JSON 解析操作，减少内存分配
+    user: (() => {
+      const stored = localStorage.getItem('daily_user')
+      return stored ? JSON.parse(stored) : null
+    })(),
     token: localStorage.getItem('daily_token') || '',
     profileLastFetch: null,
   }),

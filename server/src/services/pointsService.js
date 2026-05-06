@@ -4,6 +4,7 @@
  * 使用乐观锁机制防止并发扣减导致负数积分
  */
 const { getDb, runInTransaction } = require('../db');
+const { paginate } = require('./paginationHelper');
 
 /**
  * 获取用户积分余额
@@ -29,32 +30,26 @@ function getBalance(userId) {
  */
 function getPointsLog(userId, type, page = 1, pageSize = 20) {
   const db = getDb();
-  const offset = (page - 1) * pageSize;
 
-  let typeFilter = '';
+  let where = 'user_id = ?';
   const params = [userId];
 
-  if (type) {
-    typeFilter = ' AND type = ?';
-    params.push(type);
-  }
+  if (type) { where += ' AND type = ?'; params.push(type); }
 
-  const total = db.prepare(
-    `SELECT COUNT(*) as total FROM points_log WHERE user_id = ?${typeFilter}`
-  ).get(params).total;
-
-  const records = db.prepare(
-    `SELECT id, type, amount, description, related_id, created_at
+  return paginate(db, {
+    countSql: `points_log WHERE ${where}`,
+    dataSql: `SELECT id, type, amount, description, related_id, created_at
      FROM points_log
-     WHERE user_id = ?${typeFilter}
-     ORDER BY created_at DESC
-     LIMIT ? OFFSET ?`
-  ).all(...params, pageSize, offset).map((row) => ({
-    id: row.id, type: row.type, amount: row.amount, description: row.description,
-    relatedId: row.related_id, createdAt: row.created_at,
-  }));
-
-  return { records, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
+     WHERE ${where}
+     ORDER BY created_at DESC`,
+    params,
+    page,
+    pageSize,
+    mapper: (row) => ({
+      id: row.id, type: row.type, amount: row.amount, description: row.description,
+      relatedId: row.related_id, createdAt: row.created_at,
+    }),
+  });
 }
 
 /**
@@ -115,4 +110,18 @@ function deductPoints(userId, amount, type, description) {
   });
 }
 
-module.exports = { getBalance, getPointsLog, addPoints, deductPoints };
+/**
+ * 获取用户已消耗积分总数
+ * 通过数据库聚合查询计算，避免前端全量遍历
+ * @param {number} userId - 用户 ID
+ * @returns {number} 已消耗积分总数
+ */
+function getConsumedPoints(userId) {
+  const db = getDb();
+  const result = db.prepare(
+    'SELECT COALESCE(SUM(ABS(amount)), 0) as total FROM points_log WHERE user_id = ? AND amount < 0'
+  ).get(userId);
+  return result.total;
+}
+
+module.exports = { getBalance, getPointsLog, addPoints, deductPoints, getConsumedPoints };

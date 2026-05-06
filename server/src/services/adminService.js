@@ -4,13 +4,14 @@
  * 敏感操作（禁用用户、调整积分、删除奖品）需要二次确认
  */
 const { getDb, runInTransaction } = require('../db');
+const { paginate } = require('./paginationHelper');
 const { formatDate } = require('../utils/dateHelper');
 const { addPoints, deductPoints } = require('./pointsService');
 const { calculateStreak, updateStreak } = require('./checkinService');
 const config = require('../config');
 
-// 需要二次确认的操作列表
-const SENSITIVE_ACTIONS = ['update_user_status', 'adjust_points', 'prize_delete'];
+// 需要二次确认的操作列表（BUG-OPT-001 修复：添加 makeup_checkin，确保补打卡需要二次确认）
+const SENSITIVE_ACTIONS = ['update_user_status', 'adjust_points', 'prize_delete', 'makeup_checkin'];
 
 /**
  * 验证操作是否已确认
@@ -152,34 +153,35 @@ function getDashboard() {
  */
 function getUsers(page = 1, pageSize = 20, search = '', status = '') {
   const db = getDb();
-  const offset = (page - 1) * pageSize;
 
-  let where = 'WHERE 1=1';
+  const conditions = ['1=1'];
   const params = [];
 
   if (search) {
-    where += ' AND (username LIKE ? OR nickname LIKE ?)';
+    conditions.push('(username LIKE ? OR nickname LIKE ?)');
     params.push(`%${search}%`, `%${search}%`);
   }
   if (status) {
-    where += ' AND status = ?';
+    conditions.push('status = ?');
     params.push(status);
   }
 
-  const total = db.prepare(`SELECT COUNT(*) as total FROM users ${where}`).get(params).total;
+  const where = conditions.join(' AND ');
 
-  const users = db.prepare(
-    `SELECT id, username, nickname, avatar, points, total_checkin_days, current_streak, status, is_admin, created_at
-     FROM users ${where}
-     ORDER BY id DESC
-     LIMIT ? OFFSET ?`
-  ).all(...params, pageSize, offset).map((row) => ({
-    id: row.id, username: row.username, nickname: row.nickname, avatar: row.avatar,
-    points: row.points, totalCheckinDays: row.total_checkin_days, currentStreak: row.current_streak,
-    status: row.status, isAdmin: row.is_admin, createdAt: row.created_at,
-  }));
-
-  return { users, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
+  return paginate(db, {
+    countSql: `users WHERE ${where}`,
+    dataSql: `SELECT id, username, nickname, avatar, points, total_checkin_days, current_streak, status, is_admin, created_at
+     FROM users WHERE ${where}
+     ORDER BY id DESC`,
+    params,
+    page,
+    pageSize,
+    mapper: (row) => ({
+      id: row.id, username: row.username, nickname: row.nickname, avatar: row.avatar,
+      points: row.points, totalCheckinDays: row.total_checkin_days, currentStreak: row.current_streak,
+      status: row.status, isAdmin: row.is_admin, createdAt: row.created_at,
+    }),
+  });
 }
 
 /**
@@ -227,32 +229,33 @@ function updateUserStatus(adminId, userId, status, confirmed = false) {
  */
 function getAllCheckins(page = 1, pageSize = 20, userId = '', startDate = '', endDate = '') {
   const db = getDb();
-  const offset = (page - 1) * pageSize;
 
-  let where = 'WHERE 1=1';
+  const conditions = ['1=1'];
   const params = [];
 
-  if (userId) { where += ' AND c.user_id = ?'; params.push(userId); }
-  if (startDate) { where += ' AND c.checkin_date >= ?'; params.push(startDate); }
-  if (endDate) { where += ' AND c.checkin_date <= ?'; params.push(endDate); }
+  if (userId) { conditions.push('c.user_id = ?'); params.push(userId); }
+  if (startDate) { conditions.push('c.checkin_date >= ?'); params.push(startDate); }
+  if (endDate) { conditions.push('c.checkin_date <= ?'); params.push(endDate); }
 
-  const total = db.prepare(`SELECT COUNT(*) as total FROM checkins c ${where}`).get(params).total;
+  const where = conditions.join(' AND ');
 
-  const records = db.prepare(
-    `SELECT c.id, c.user_id, u.username, u.nickname, t.name as task_name, c.checkin_date, c.image_path, c.note, c.points_earned, c.is_makeup, c.makeup_by, c.created_at
+  return paginate(db, {
+    countSql: `checkins c WHERE ${where}`,
+    dataSql: `SELECT c.id, c.user_id, u.username, u.nickname, t.name as task_name, c.checkin_date, c.image_path, c.note, c.points_earned, c.is_makeup, c.makeup_by, c.created_at
      FROM checkins c
      LEFT JOIN users u ON c.user_id = u.id
      LEFT JOIN tasks t ON c.task_id = t.id
-     ${where}
-     ORDER BY c.created_at DESC
-     LIMIT ? OFFSET ?`
-  ).all(...params, pageSize, offset).map((row) => ({
-    id: row.id, userId: row.user_id, username: row.username, nickname: row.nickname,
-    taskName: row.task_name, checkinDate: row.checkin_date, imagePath: row.image_path, note: row.note,
-    pointsEarned: row.points_earned, isMakeup: row.is_makeup, makeupBy: row.makeup_by, createdAt: row.created_at,
-  }));
-
-  return { records, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
+     WHERE ${where}
+     ORDER BY c.created_at DESC`,
+    params,
+    page,
+    pageSize,
+    mapper: (row) => ({
+      id: row.id, userId: row.user_id, username: row.username, nickname: row.nickname,
+      taskName: row.task_name, checkinDate: row.checkin_date, imagePath: row.image_path, note: row.note,
+      pointsEarned: row.points_earned, isMakeup: row.is_makeup, makeupBy: row.makeup_by, createdAt: row.created_at,
+    }),
+  });
 }
 
 /**
@@ -265,62 +268,91 @@ function getAllCheckins(page = 1, pageSize = 20, userId = '', startDate = '', en
  */
 function getAllPointsLog(page = 1, pageSize = 20, userId = '', type = '') {
   const db = getDb();
-  const offset = (page - 1) * pageSize;
 
-  let where = 'WHERE 1=1';
+  const conditions = ['1=1'];
   const params = [];
 
-  if (userId) { where += ' AND pl.user_id = ?'; params.push(userId); }
-  if (type) { where += ' AND pl.type = ?'; params.push(type); }
+  if (userId) { conditions.push('pl.user_id = ?'); params.push(userId); }
+  if (type) { conditions.push('pl.type = ?'); params.push(type); }
 
-  const total = db.prepare(`SELECT COUNT(*) as total FROM points_log pl ${where}`).get(params).total;
+  const where = conditions.join(' AND ');
 
-  const records = db.prepare(
-    `SELECT pl.id, pl.user_id, u.username, u.nickname, pl.type, pl.amount, pl.description, pl.created_at
+  return paginate(db, {
+    countSql: `points_log pl WHERE ${where}`,
+    dataSql: `SELECT pl.id, pl.user_id, u.username, u.nickname, pl.type, pl.amount, pl.description, pl.created_at
      FROM points_log pl
      LEFT JOIN users u ON pl.user_id = u.id
-     ${where}
-     ORDER BY pl.created_at DESC
-     LIMIT ? OFFSET ?`
-  ).all(...params, pageSize, offset).map((row) => ({
-    id: row.id, userId: row.user_id, username: row.username, nickname: row.nickname,
-    type: row.type, amount: row.amount, description: row.description, createdAt: row.created_at,
-  }));
-
-  return { records, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
+     WHERE ${where}
+     ORDER BY pl.created_at DESC`,
+    params,
+    page,
+    pageSize,
+    mapper: (row) => ({
+      id: row.id, userId: row.user_id, username: row.username, nickname: row.nickname,
+      type: row.type, amount: row.amount, description: row.description, createdAt: row.created_at,
+    }),
+  });
 }
 
 /**
- * 管理奖品（创建/更新/删除）
- * 删除操作需要二次确认
+ * 创建奖品
+ * 将 managePrize 拆分为独立函数，提高代码可读性
  * @param {number} adminId - 管理员 ID
- * @param {string} action - 操作类型：create/update/delete
  * @param {Object} prizeData - 奖品数据
+ * @returns {Object} 操作结果
+ */
+function createPrize(adminId, prizeData) {
+  const db = getDb();
+  db.prepare(
+    'INSERT INTO prizes (name, description, image, probability, prize_type, points_reward, stock) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(prizeData.name, prizeData.description || null, prizeData.image || null, prizeData.probability,
+    prizeData.prizeType || 'virtual', prizeData.pointsReward || 0, prizeData.stock || -1);
+  
+  logAdminAction(adminId, 'prize_create', 'prize', null, prizeData);
+  // 奖品变更后失效缓存，确保下次查询获取最新数据
+  const { invalidatePrizeCache } = require('./lotteryService');
+  invalidatePrizeCache();
+  return { success: true };
+}
+
+/**
+ * 更新奖品
+ * @param {number} adminId - 管理员 ID
+ * @param {Object} prizeData - 奖品数据（需包含 id）
+ * @returns {Object} 操作结果
+ */
+function updatePrize(adminId, prizeData) {
+  const db = getDb();
+  db.prepare(
+    'UPDATE prizes SET name = ?, description = ?, probability = ?, points_reward = ?, stock = ?, prize_type = ? WHERE id = ?'
+  ).run(prizeData.name, prizeData.description || null, prizeData.probability,
+    prizeData.pointsReward || 0, prizeData.stock || -1, prizeData.prizeType || 'virtual', prizeData.id);
+  
+  logAdminAction(adminId, 'prize_update', 'prize', prizeData.id, prizeData);
+  // 奖品变更后失效缓存
+  const { invalidatePrizeCache } = require('./lotteryService');
+  invalidatePrizeCache();
+  return { success: true };
+}
+
+/**
+ * 删除奖品（软删除）
+ * 敏感操作，需要二次确认
+ * @param {number} adminId - 管理员 ID
+ * @param {number} prizeId - 奖品 ID
  * @param {boolean} confirmed - 是否已确认
  * @returns {Object} 操作结果
  */
-function managePrize(adminId, action, prizeData, confirmed = false) {
-  if (action === 'delete') {
-    requireConfirmation('prize_delete', confirmed);
-  }
-
+function deletePrize(adminId, prizeId, confirmed = false) {
+  requireConfirmation('prize_delete', confirmed);
+  
   const db = getDb();
-
-  if (action === 'create') {
-    db.prepare(
-      'INSERT INTO prizes (name, description, image, probability, prize_type, points_reward, stock) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).run(prizeData.name, prizeData.description || null, prizeData.image || null, prizeData.probability,
-      prizeData.prizeType || 'virtual', prizeData.pointsReward || 0, prizeData.stock || -1);
-  } else if (action === 'update') {
-    db.prepare(
-      'UPDATE prizes SET name = ?, description = ?, probability = ?, points_reward = ?, stock = ?, prize_type = ? WHERE id = ?'
-    ).run(prizeData.name, prizeData.description || null, prizeData.probability,
-      prizeData.pointsReward || 0, prizeData.stock || -1, prizeData.prizeType || 'virtual', prizeData.id);
-  } else if (action === 'delete') {
-    db.prepare('UPDATE prizes SET status = ? WHERE id = ?').run('deleted', prizeData.id);
-  }
-
-  logAdminAction(adminId, `prize_${action}`, 'prize', prizeData.id, prizeData);
+  db.prepare('UPDATE prizes SET status = ? WHERE id = ?').run('deleted', prizeId);
+  
+  logAdminAction(adminId, 'prize_delete', 'prize', prizeId, { id: prizeId });
+  // 奖品删除后失效缓存
+  const { invalidatePrizeCache } = require('./lotteryService');
+  invalidatePrizeCache();
   return { success: true };
 }
 
@@ -332,23 +364,22 @@ function managePrize(adminId, action, prizeData, confirmed = false) {
  */
 function getAllLotteryRecords(page = 1, pageSize = 20) {
   const db = getDb();
-  const offset = (page - 1) * pageSize;
 
-  const total = db.prepare('SELECT COUNT(*) as total FROM lottery_records').get().total;
-
-  const records = db.prepare(
-    `SELECT lr.id, lr.user_id, u.username, u.nickname, p.name as prize_name, lr.points_cost, lr.is_received, lr.created_at
+  return paginate(db, {
+    countSql: 'lottery_records',
+    dataSql: `SELECT lr.id, lr.user_id, u.username, u.nickname, p.name as prize_name, lr.points_cost, lr.is_received, lr.created_at
      FROM lottery_records lr
      LEFT JOIN users u ON lr.user_id = u.id
      LEFT JOIN prizes p ON lr.prize_id = p.id
-     ORDER BY lr.created_at DESC
-     LIMIT ? OFFSET ?`
-  ).all(pageSize, offset).map((row) => ({
-    id: row.id, userId: row.user_id, username: row.username, nickname: row.nickname,
-    prizeName: row.prize_name, pointsCost: row.points_cost, isReceived: row.is_received, createdAt: row.created_at,
-  }));
-
-  return { records, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
+     ORDER BY lr.created_at DESC`,
+    params: [],
+    page,
+    pageSize,
+    mapper: (row) => ({
+      id: row.id, userId: row.user_id, username: row.username, nickname: row.nickname,
+      prizeName: row.prize_name, pointsCost: row.points_cost, isReceived: row.is_received, createdAt: row.created_at,
+    }),
+  });
 }
 
 /**
@@ -360,29 +391,30 @@ function getAllLotteryRecords(page = 1, pageSize = 20) {
  */
 function getAllImages(page = 1, pageSize = 20, userId = '') {
   const db = getDb();
-  const offset = (page - 1) * pageSize;
 
-  let where = "WHERE i.status = 'active'";
+  const conditions = ["i.status = 'active'"];
   const params = [];
 
-  if (userId) { where += ' AND i.user_id = ?'; params.push(userId); }
+  if (userId) { conditions.push('i.user_id = ?'); params.push(userId); }
 
-  const total = db.prepare(`SELECT COUNT(*) as total FROM images i ${where}`).get(params).total;
+  const where = conditions.join(' AND ');
 
-  const records = db.prepare(
-    `SELECT i.id, i.user_id, u.username, u.nickname, i.file_path, i.original_name, i.file_size, i.width, i.height, i.related_type, i.created_at
+  return paginate(db, {
+    countSql: `images i WHERE ${where}`,
+    dataSql: `SELECT i.id, i.user_id, u.username, u.nickname, i.file_path, i.original_name, i.file_size, i.width, i.height, i.related_type, i.created_at
      FROM images i
      LEFT JOIN users u ON i.user_id = u.id
-     ${where}
-     ORDER BY i.created_at DESC
-     LIMIT ? OFFSET ?`
-  ).all(...params, pageSize, offset).map((row) => ({
-    id: row.id, userId: row.user_id, username: row.username, nickname: row.nickname,
-    filePath: row.file_path, originalName: row.original_name, fileSize: row.file_size,
-    width: row.width, height: row.height, relatedType: row.related_type, createdAt: row.created_at,
-  }));
-
-  return { records, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
+     WHERE ${where}
+     ORDER BY i.created_at DESC`,
+    params,
+    page,
+    pageSize,
+    mapper: (row) => ({
+      id: row.id, userId: row.user_id, username: row.username, nickname: row.nickname,
+      filePath: row.file_path, originalName: row.original_name, fileSize: row.file_size,
+      width: row.width, height: row.height, relatedType: row.related_type, createdAt: row.created_at,
+    }),
+  });
 }
 
 /**
@@ -393,22 +425,21 @@ function getAllImages(page = 1, pageSize = 20, userId = '') {
  */
 function getAdminLogs(page = 1, pageSize = 20) {
   const db = getDb();
-  const offset = (page - 1) * pageSize;
 
-  const total = db.prepare('SELECT COUNT(*) as total FROM admin_logs').get().total;
-
-  const records = db.prepare(
-    `SELECT al.id, al.admin_id, u.username as admin_name, al.action, al.target_type, al.target_id, al.detail, al.created_at
+  return paginate(db, {
+    countSql: 'admin_logs',
+    dataSql: `SELECT al.id, al.admin_id, u.username as admin_name, al.action, al.target_type, al.target_id, al.detail, al.created_at
      FROM admin_logs al
      LEFT JOIN users u ON al.admin_id = u.id
-     ORDER BY al.created_at DESC
-     LIMIT ? OFFSET ?`
-  ).all(pageSize, offset).map((row) => ({
-    id: row.id, adminId: row.admin_id, adminName: row.admin_name, action: row.action,
-    targetType: row.target_type, targetId: row.target_id, detail: row.detail, createdAt: row.created_at,
-  }));
-
-  return { records, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
+     ORDER BY al.created_at DESC`,
+    params: [],
+    page,
+    pageSize,
+    mapper: (row) => ({
+      id: row.id, adminId: row.admin_id, adminName: row.admin_name, action: row.action,
+      targetType: row.target_type, targetId: row.target_id, detail: row.detail, createdAt: row.created_at,
+    }),
+  });
 }
 
 /**
@@ -428,6 +459,6 @@ function logAdminAction(adminId, action, targetType, targetId, detail) {
 
 module.exports = {
   makeupCheckin, adjustPoints, getDashboard, getUsers, updateUserStatus,
-  getAllCheckins, getAllPointsLog, managePrize, getAllLotteryRecords,
+  getAllCheckins, getAllPointsLog, createPrize, updatePrize, deletePrize, getAllLotteryRecords,
   getAllImages, getAdminLogs,
 };

@@ -107,8 +107,9 @@ async function saveProfile() {
 
 function handleReset() {
   if (confirm('确定要重置所有数据吗？此操作不可撤销。')) {
-    // 实际项目中应调用后端 API
-    alert('数据重置功能开发中')
+    // 数据重置功能尚未实现后端 API，当前为占位逻辑
+    // TODO: 实现后端 /api/user/reset 接口后启用完整功能
+    alert('数据重置功能尚未开放，敬请期待后续版本更新。')
   }
 }
 

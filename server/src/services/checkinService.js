@@ -6,6 +6,7 @@ const { getDb, runInTransaction } = require('../db');
 const { formatDate } = require('../utils/dateHelper');
 const { addPoints } = require('./pointsService');
 const config = require('../config');
+const { paginate } = require('./paginationHelper');
 
 // 连续打卡计算的最大天数限制，防止无限循环
 const MAX_STREAK_DAYS = 365;
@@ -94,29 +95,31 @@ function getTodayCheckin(userId) {
  */
 function getCheckinHistory(userId, year, month, page = 1, pageSize = 30) {
   const db = getDb();
-  const offset = (page - 1) * pageSize;
 
-  let where = 'WHERE c.user_id = ?';
+  // 构建动态筛选条件
+  const conditions = ['c.user_id = ?'];
   const params = [userId];
 
-  if (year) { where += ' AND strftime("%Y", c.checkin_date) = ?'; params.push(String(year)); }
-  if (month) { where += ' AND strftime("%m", c.checkin_date) = ?'; params.push(String(month).padStart(2, '0')); }
+  if (year) { conditions.push('strftime("%Y", c.checkin_date) = ?'); params.push(String(year)); }
+  if (month) { conditions.push('strftime("%m", c.checkin_date) = ?'); params.push(String(month).padStart(2, '0')); }
 
-  const total = db.prepare(`SELECT COUNT(*) as total FROM checkins c ${where}`).get(params).total;
+  const where = conditions.join(' AND ');
 
-  const records = db.prepare(
-    `SELECT c.id, c.task_id, t.name as task_name, c.checkin_date, c.image_path, c.note, c.points_earned, c.created_at
+  return paginate(db, {
+    countSql: `checkins c WHERE ${where}`,
+    dataSql: `SELECT c.id, c.task_id, t.name as task_name, c.checkin_date, c.image_path, c.note, c.points_earned, c.created_at
      FROM checkins c
      LEFT JOIN tasks t ON c.task_id = t.id
-     ${where}
-     ORDER BY c.checkin_date DESC
-     LIMIT ? OFFSET ?`
-  ).all(...params, pageSize, offset).map((row) => ({
-    id: row.id, taskId: row.task_id, taskName: row.task_name, checkinDate: row.checkin_date,
-    imagePath: row.image_path, note: row.note, pointsEarned: row.points_earned, createdAt: row.created_at,
-  }));
-
-  return { records, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
+     WHERE ${where}
+     ORDER BY c.checkin_date DESC`,
+    params,
+    page,
+    pageSize,
+    mapper: (row) => ({
+      id: row.id, taskId: row.task_id, taskName: row.task_name, checkinDate: row.checkin_date,
+      imagePath: row.image_path, note: row.note, pointsEarned: row.points_earned, createdAt: row.created_at,
+    }),
+  });
 }
 
 /**

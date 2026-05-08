@@ -177,13 +177,13 @@ describe('路由同步处理测试', () => {
     expect(res.body.code).toBe(200);
   });
 
-  test('POST /api/upload 同步处理成功', async () => {
+  test('POST /api/upload 无文件时返回错误', async () => {
     const res = await request(app)
       .post('/api/upload')
       .set('Authorization', 'Bearer test-token');
 
-    expect(res.status).toBe(200);
-    expect(res.body.code).toBe(200);
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe(400);
   });
 
   test('路由错误被正确捕获', async () => {

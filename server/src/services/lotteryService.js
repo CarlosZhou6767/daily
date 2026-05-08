@@ -164,4 +164,9 @@ function getLotteryRecords(userId, page = 1, pageSize = 20) {
   });
 }
 
+function invalidatePrizeCache() {
+  prizesCache = null;
+  prizesCacheTime = 0;
+}
+
 module.exports = { getPrizes, draw, getLotteryRecords, invalidatePrizeCache };

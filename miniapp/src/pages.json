@@ -1,0 +1,27 @@
+{
+  "pages": [
+    { "path": "pages/index/index", "style": { "navigationBarTitleText": "每日打卡" } },
+    { "path": "pages/checkin/index", "style": { "navigationBarTitleText": "打卡详情" } },
+    { "path": "pages/points/index", "style": { "navigationBarTitleText": "积分中心" } },
+    { "path": "pages/lottery/index", "style": { "navigationBarTitleText": "积分抽奖" } },
+    { "path": "pages/profile/index", "style": { "navigationBarTitleText": "个人中心" } },
+    { "path": "pages/profile/records", "style": { "navigationBarTitleText": "我的记录" } }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "white",
+    "navigationBarTitleText": "Daily",
+    "navigationBarBackgroundColor": "#6172f3",
+    "backgroundColor": "#f8fafc"
+  },
+  "tabBar": {
+    "color": "#9ca3af",
+    "selectedColor": "#6172f3",
+    "backgroundColor": "#ffffff",
+    "list": [
+      { "pagePath": "pages/index/index", "text": "打卡", "iconPath": "static/tab-checkin.png", "selectedIconPath": "static/tab-checkin-active.png" },
+      { "pagePath": "pages/points/index", "text": "积分", "iconPath": "static/tab-points.png", "selectedIconPath": "static/tab-points-active.png" },
+      { "pagePath": "pages/lottery/index", "text": "抽奖", "iconPath": "static/tab-lottery.png", "selectedIconPath": "static/tab-lottery-active.png" },
+      { "pagePath": "pages/profile/index", "text": "我的", "iconPath": "static/tab-profile.png", "selectedIconPath": "static/tab-profile-active.png" }
+    ]
+  }
+}
